@@ -3,8 +3,8 @@ FROM public.ecr.aws/lambda/python:3.12
 # Set the working directory to /var/task
 WORKDIR ${LAMBDA_TASK_ROOT}
 
-# Copy requirements first to leverage Docker cache
-COPY requirements.txt ./
+# Copy Lambda requirements first to leverage Docker cache
+COPY lambda_function/requirements.txt ./requirements.txt
 
 # Install dependencies
 RUN pip install -r requirements.txt

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "")
-DEFAULT_API_KEY = os.getenv("API_GATEWAY_API_KEY", "")
+API_GATEWAY_API_KEY = os.getenv("API_GATEWAY_API_KEY", "")
 
 st.set_page_config(page_title="Multi-Agent Research", layout="wide")
 
@@ -16,14 +16,8 @@ st.title("Multi-Agent Research")
 st.caption("Search, summarize, fact-check, and generate a report.")
 
 with st.sidebar:
-    st.header("Access")
-    api_url = st.text_input("API endpoint", value=API_GATEWAY_URL, placeholder="https://.../prod/research")
-    api_key = st.text_input(
-        "Access key",
-        value=DEFAULT_API_KEY,
-        type="password",
-        help="Use the API Gateway key assigned to you.",
-    )
+    st.header("Demo Limits")
+    st.write("This public demo is rate-limited to control API costs.")
 
 query = st.text_area(
     "Research question",
@@ -42,11 +36,11 @@ with col_c:
 submitted = st.button("Generate report", type="primary", use_container_width=True)
 
 if submitted:
-    if not api_url:
-        st.error("Add the API Gateway endpoint first.")
+    if not API_GATEWAY_URL:
+        st.error("API_GATEWAY_URL is not configured on the Streamlit server.")
         st.stop()
-    if not api_key:
-        st.error("Add your access key first.")
+    if not API_GATEWAY_API_KEY:
+        st.error("API_GATEWAY_API_KEY is not configured on the Streamlit server.")
         st.stop()
     if not query.strip():
         st.error("Enter a research question.")
@@ -54,7 +48,7 @@ if submitted:
 
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": api_key,
+        "x-api-key": API_GATEWAY_API_KEY,
     }
     payload = {
         "query": query.strip(),
@@ -66,7 +60,7 @@ if submitted:
     with st.status("Running the research workflow...", expanded=True) as status:
         st.write("Calling the API endpoint.")
         try:
-            response = requests.post(api_url, headers=headers, json=payload, timeout=320)
+            response = requests.post(API_GATEWAY_URL, headers=headers, json=payload, timeout=320)
             response.raise_for_status()
         except requests.Timeout:
             status.update(label="Request timed out.", state="error")
