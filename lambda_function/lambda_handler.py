@@ -16,25 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def _parse_event(event):
-    if isinstance(event, dict) and isinstance(event.get("body"), str):
-        return json.loads(event["body"] or "{}"), True
-    return event, False
-
-
-def _response(status_code, body, is_api_gateway_event):
-    if is_api_gateway_event:
-        return {
-            "statusCode": status_code,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(body),
-        }
-    return {"statusCode": status_code, "body": body}
-
-
 def lambda_handler(event, context):
-    event, is_api_gateway_event = _parse_event(event)
-
     # Log environment variables (masked for security)
     logger.info("SERPER_API_KEY present: %s", bool(os.getenv("SERPER_API_KEY")))
     logger.info("OPENROUTER_API_KEY present: %s", bool(os.getenv("OPENROUTER_API_KEY")))
@@ -47,11 +29,20 @@ def lambda_handler(event, context):
 
     # Validate parameters
     if not 0 <= confidence_threshold <= 1:
-        return _response(400, {"error": "Confidence threshold must be between 0 and 1"}, is_api_gateway_event)
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Confidence threshold must be between 0 and 1"}),
+        }
     if max_retries < 0:
-        return _response(400, {"error": "Max retries must be non-negative"}, is_api_gateway_event)
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Max retries must be non-negative"}),
+        }
     if add_max_results < 1:
-        return _response(400, {"error": "Additional max results must be positive"}, is_api_gateway_event)
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Additional max results must be positive"}),
+        }
 
     # Build the research graph with custom parameters
     graph = build_research_graph(
@@ -78,11 +69,10 @@ def lambda_handler(event, context):
         }
     )
 
-    return _response(
-        200,
-        {
+    return {
+        "statusCode": 200,
+        "body": {
             "final_report": result.get("final_report", ""),
             "errors": result.get("errors", []),
         },
-        is_api_gateway_event,
-    )
+    }

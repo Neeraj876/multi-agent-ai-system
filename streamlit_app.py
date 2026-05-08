@@ -1,14 +1,16 @@
 import json
 import os
 
-import requests
+import boto3
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
-API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "")
-API_GATEWAY_API_KEY = os.getenv("API_GATEWAY_API_KEY", "")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+LAMBDA_FUNCTION_NAME = os.getenv("LAMBDA_FUNCTION_NAME", "")
 
 st.set_page_config(page_title="Multi-Agent Research", layout="wide")
 
@@ -36,20 +38,13 @@ with col_c:
 submitted = st.button("Generate report", type="primary", use_container_width=True)
 
 if submitted:
-    if not API_GATEWAY_URL:
-        st.error("API_GATEWAY_URL is not configured on the Streamlit server.")
-        st.stop()
-    if not API_GATEWAY_API_KEY:
-        st.error("API_GATEWAY_API_KEY is not configured on the Streamlit server.")
+    if not LAMBDA_FUNCTION_NAME:
+        st.error("LAMBDA_FUNCTION_NAME is not configured on the Streamlit server.")
         st.stop()
     if not query.strip():
         st.error("Enter a research question.")
         st.stop()
 
-    headers = {
-        "Content-Type": "application/json",
-        "x-api-key": API_GATEWAY_API_KEY,
-    }
     payload = {
         "query": query.strip(),
         "confidence_threshold": confidence_threshold,
@@ -58,25 +53,29 @@ if submitted:
     }
 
     with st.status("Running the research workflow...", expanded=True) as status:
-        st.write("Calling the API endpoint.")
+        st.write("Invoking the Lambda function.")
         try:
-            response = requests.post(API_GATEWAY_URL, headers=headers, json=payload, timeout=320)
-            response.raise_for_status()
-        except requests.Timeout:
-            status.update(label="Request timed out.", state="error")
-            st.error("The request timed out. Try a narrower query.")
-            st.stop()
-        except requests.HTTPError as exc:
-            status.update(label="API request failed.", state="error")
-            st.error(f"API returned {response.status_code}: {response.text}")
-            st.stop()
-        except requests.RequestException as exc:
-            status.update(label="API request failed.", state="error")
+            client_kwargs = {"region_name": AWS_REGION}
+            if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+                client_kwargs.update(
+                    {
+                        "aws_access_key_id": AWS_ACCESS_KEY_ID,
+                        "aws_secret_access_key": AWS_SECRET_ACCESS_KEY,
+                    }
+                )
+            lambda_client = boto3.client("lambda", **client_kwargs)
+            response = lambda_client.invoke(
+                FunctionName=LAMBDA_FUNCTION_NAME,
+                InvocationType="RequestResponse",
+                Payload=json.dumps(payload).encode("utf-8"),
+            )
+        except Exception as exc:
+            status.update(label="Lambda invocation failed.", state="error")
             st.error(str(exc))
             st.stop()
 
         st.write("Parsing the response.")
-        data = response.json()
+        data = json.loads(response["Payload"].read().decode("utf-8"))
         body = data.get("body", data)
         if isinstance(body, str):
             body = json.loads(body)
