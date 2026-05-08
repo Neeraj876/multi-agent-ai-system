@@ -12,22 +12,13 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 LAMBDA_FUNCTION_NAME = os.getenv("LAMBDA_FUNCTION_NAME", "")
 
-st.set_page_config(page_title="Agentic Research Intelligence", layout="wide")
+st.set_page_config(page_title="Multi-Agent Research Assistant", layout="wide")
 
-st.title("Agentic Research Intelligence")
+st.title("Multi-Agent Research Assistant")
 st.caption(
-    "A serverless LangGraph workflow that searches the web, summarizes evidence, "
+    "An agentic LangGraph workflow that searches the web, summarizes evidence, "
     "checks confidence, and generates a structured research report."
 )
-
-with st.expander("System overview", expanded=False):
-    st.write(
-        "This application runs a multi-agent research pipeline: a search agent gathers "
-        "web evidence, a summarization agent condenses the findings, a fact-checking "
-        "agent evaluates confidence, and a report-generation agent produces the final answer. "
-        "The frontend invokes an AWS Lambda backend deployed from a Docker image, with LLM calls "
-        "routed through OpenRouter."
-    )
 
 with st.sidebar:
     st.header("Usage Limits")
