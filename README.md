@@ -18,7 +18,6 @@
     <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/ruff-passed-red"/></a>
     <a href="https://docs.pytest.org/"><img src="https://img.shields.io/badge/pytest-passed-brightgreen"/></a>
     <a href="https://github.com/pre-commit/pre-commit"><img src="https://img.shields.io/badge/pre--commit-passed-brightgreen"/></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg"/></a>
 </div>
 <p align="center">
     <em>A multi-agent research system using LangGraph for automated research and report generation</em>
@@ -40,7 +39,6 @@ The project has been developed as part of the following [blog](https://circleci.
   - [Local Execution](#local-execution)
   - [AWS Lambda Deployment](#aws-lambda-deployment)
   - [AWS Lambda Invocation](#aws-lambda-invocation)
-- [License](#license)
 
 ## Features
 
@@ -167,6 +165,3 @@ aws lambda invoke \
     cat response.json | jq
 ```
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -1,0 +1,74 @@
+name: Build and Deploy
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-22.04
+
+    env:
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      REPOSITORY_NAME: ${{ secrets.REPOSITORY_NAME }}
+      IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+      LAMBDA_FUNCTION_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME }}
+      ROLE_NAME: ${{ secrets.ROLE_NAME }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Create venv and install dependencies
+        run: uv sync --all-extras
+
+      - name: Run ruff
+        run: uv run ruff check --fix --unsafe-fixes .
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Create .env file
+        shell: bash
+        run: |
+          cat > .env <<EOF
+          SERPER_API_KEY=${SERPER_API_KEY}
+          OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+          AWS_REGION=${AWS_REGION}
+          AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+          AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+          AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}
+          REPOSITORY_NAME=${REPOSITORY_NAME}
+          IMAGE_NAME=${IMAGE_NAME}
+          LAMBDA_FUNCTION_NAME=${LAMBDA_FUNCTION_NAME}
+          ROLE_NAME=${ROLE_NAME}
+          EOF
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Deploy to AWS
+        shell: bash
+        run: |
+          chmod +x build_deploy.sh
+          ./build_deploy.sh
