@@ -31,8 +31,8 @@ col_a, col_b, col_c = st.columns(3)
 with col_a:
     confidence_threshold = st.slider(
         "Confidence threshold",
-        0.0,
-        1.0,
+        0.5,
+        0.9,
         0.8,
         0.05,
         help="Minimum fact-check confidence required before the workflow accepts the result.",
@@ -41,7 +41,7 @@ with col_b:
     max_retries = st.number_input(
         "Max retries",
         min_value=0,
-        max_value=5,
+        max_value=1,
         value=1,
         step=1,
         help="How many times the workflow can search again if confidence is too low.",
@@ -50,7 +50,7 @@ with col_c:
     add_max_results = st.number_input(
         "Extra results per retry",
         min_value=1,
-        max_value=10,
+        max_value=3,
         value=2,
         step=1,
         help="How many additional search results are added on each retry.",
