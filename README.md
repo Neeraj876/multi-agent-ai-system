@@ -1,281 +1,273 @@
-# Multi-Agent LangGraph Research System
+# Multi-Agent Research Assistant
 
-<div align="center">
-    <img src="images/collaborative _multi_agent_ai_system_with_langgraph.png" alt="Multi-Agent LangGraph Architecture">
-</div>
+An agentic research application that turns a user question into a structured report using a LangGraph multi-agent workflow. The system searches the web, summarizes evidence, checks confidence, retries when needed, and serves the final report through a public Streamlit interface backed by AWS Lambda.
 
-<div align="center">
-    <a href="https://www.python.org/downloads/release/python-3120/"><img src="https://img.shields.io/badge/python-3.12+-blue.svg"/></a>
-    <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/uv-Package%20Manager-blue"/></a>
-    <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/LangGraph-Agentic-ff6b6b"/></a>
-    <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-Containerized-blue"/></a>
-    <a href="https://aws.amazon.com/lambda/"><img src="https://img.shields.io/badge/AWS%20Lambda-Serverless-orange"/></a>
-    <a href="https://pydantic.dev/"><img src="https://img.shields.io/badge/Pydantic-Data%20Validation-e92063"/></a>
-</div>
-<div align="center">
-    <a href="https://github.com/features/actions"><img src="https://img.shields.io/badge/CI/CD-passed-2088ff"/></a>
-    <a href="http://mypy-lang.org/"><img src="https://img.shields.io/badge/mypy-passed-blue"/></a>
-    <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/ruff-passed-red"/></a>
-    <a href="https://github.com/pre-commit/pre-commit"><img src="https://img.shields.io/badge/pre--commit-passed-brightgreen"/></a>
-</div>
-<p align="center">
-    <em>A multi-agent research system using LangGraph for automated research and report generation</em>
-</p>
-
----
-
-Build, test, and deploy a multi-agent AI system using LangGraph, Docker, AWS Lambda, and CircleCI. The system uses a research-driven AI workflow where different agents,such as fact-checking, summarization, and search agents, work together seamlessly. This application is packaged into a Docker container, deployed to AWS Lambda, and the entire pipeline is run using CircleCI.
-
-The project has been developed as part of the following [blog](https://circleci.com/blog/end-to-end-testing-and-deployment-of-a-multi-agent-ai-system/)
+![Architecture](./images/collaborative%20_multi_agent_ai_system_with_langgraph.png)
 
 ## Table of Contents
 
+- [Project Overview](#project-overview)
+- [Architecture Overview](#architecture-overview)
+  - [1. Serving Flow](#1-serving-flow)
+  - [2. Multi-Agent Workflow](#2-multi-agent-workflow)
+  - [3. Rate Limiting](#3-rate-limiting)
+  - [4. Deployment Pipeline](#4-deployment-pipeline)
 - [Features](#features)
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Configuration](#configuration)
-  - [Local Execution](#local-execution)
-  - [AWS Lambda Deployment](#aws-lambda-deployment)
-  - [AWS Lambda Invocation](#aws-lambda-invocation)
+- [Technology Stack](#technology-stack)
+- [Setup](#setup)
+  - [Environment Variables](#environment-variables)
+  - [Install Dependencies](#install-dependencies)
+  - [Run Streamlit Locally](#run-streamlit-locally)
+- [AWS Deployment](#aws-deployment)
+  - [DynamoDB Rate Limit Table](#dynamodb-rate-limit-table)
+  - [Lambda Deployment](#lambda-deployment)
+  - [GitHub Actions Deployment](#github-actions-deployment)
+- [Streamlit Cloud Deployment](#streamlit-cloud-deployment)
+- [Runtime Configuration](#runtime-configuration)
+
+## Project Overview
+
+This project is a deployable multi-agent AI system built around a production-style request flow:
+
+1. A user submits a research question in Streamlit.
+2. Streamlit invokes an AWS Lambda function.
+3. Lambda checks DynamoDB-backed request limits.
+4. The LangGraph workflow coordinates specialized agents.
+5. The final structured report is returned to the Streamlit UI.
+
+The project demonstrates how a multi-agent research workflow can be packaged, deployed, rate-limited, and made available publicly with cost controls.
+
+## Architecture Overview
+
+The system is organized into four main layers: **serving**, **agent orchestration**, **rate limiting**, and **deployment**.
+
+### 1. Serving Flow
+
+- **User** interacts with the public Streamlit application.
+- **Streamlit Cloud** hosts the frontend and stores backend invocation credentials in private app secrets.
+- **AWS Lambda** runs the backend workflow as a Docker container.
+- **Amazon ECR** stores the Lambda-compatible Docker image.
+- **CloudWatch Logs** captures runtime logs for debugging and observability.
+
+Active request path:
+
+```text
+User -> Streamlit Cloud -> AWS Lambda -> DynamoDB rate limit check -> LangGraph -> Streamlit
+```
+
+### 2. Multi-Agent Workflow
+
+The LangGraph workflow coordinates specialized agents as a graph instead of a single prompt chain.
+
+- **Search Agent** retrieves web evidence using Serper.
+- **Summarization Agent** condenses retrieved content.
+- **Fact-Checking Agent** validates confidence against the research question.
+- **Report Agent** generates the final structured report.
+- **Retry Routing** sends the workflow back for more evidence when confidence is too low.
+
+Each agent owns a focused responsibility, while LangGraph controls state transitions, routing, and retry behavior across the workflow.
+
+### 3. Rate Limiting
+
+The public demo is rate-limited inside Lambda before the research workflow starts.
+
+Current intended limit:
+
+- 2 requests per Streamlit browser session per month
+
+### 4. Deployment Pipeline
+
+GitHub Actions handles the production deployment flow:
+
+```text
+Push to GitHub -> Build Docker image -> Push to ECR -> Update Lambda image -> Update Lambda env vars
+```
+
+The deployment script also ensures the Lambda execution role has the DynamoDB permission required for rate limiting.
 
 ## Features
 
-- Multi-agent architecture using LangGraph
-- Automated web search using Serper API
-- Fact-checking and verification
-- Report generation with structured summaries
-- AWS Lambda deployment support
-- Configurable confidence scores and retry mechanisms
+- Streamlit UI
+- Serverless backend on AWS Lambda
+- Dockerized Lambda runtime
+- LangGraph-based agent orchestration
+- Web search with Serper
+- OpenRouter model integration
+- Confidence-based retry loop
+- DynamoDB-backed public demo rate limiting
+- CloudWatch runtime logging
+- GitHub Actions deployment to AWS
 
-## Architecture
+## Technology Stack
 
-```text
-                          +----------------------+
-                          |        User          |
-                          +----------+-----------+
-                                     |
-                                     v
-                          +----------------------+
-                          |   Streamlit Cloud    |
-                          |   Frontend UI        |
-                          +----------+-----------+
-                                     |
-                                     | invokes Lambda directly
-                                     v
-+------------------------- AWS Cloud --------------------------+
-|                                                              |
-|   +----------------------+        +----------------------+   |
-|   |  AWS Lambda          |        |  Amazon ECR          |   |
-|   |  Container Runtime   |<-------|  Docker Image        |   |
-|   +----------+-----------+        +----------------------+   |
-|              |                                               |
-|              v                                               |
-|   +----------------------+                                   |
-|   |  Lambda Handler      |                                   |
-|   +----------+-----------+                                   |
-|              |                                               |
-|              v                                               |
-|   +---------------------- LangGraph ----------------------+  |
-|   |                                                        |  |
-|   |  Search Agent  ->  Summarization Agent                 |  |
-|   |       ^                    |                            |  |
-|   |       |                    v                            |  |
-|   |  retry if low confidence  Fact-Checking Agent           |  |
-|   |                            |                            |  |
-|   |                            v                            |  |
-|   |                       Report Agent                      |  |
-|   |                                                        |  |
-|   +------------------------+-------------------------------+  |
-|                            |                                  |
-|                            v                                  |
-|                  +----------------------+                    |
-|                  | CloudWatch Logs      |                    |
-|                  +----------------------+                    |
-|                                                              |
-+--------------------------------------------------------------+
-                                     |
-                                     v
-                          +----------------------+
-                          | Final Research Report|
-                          +----------------------+
-                                     |
-                                     v
-                          +----------------------+
-                          | Streamlit displays it|
-                          +----------------------+
+| Layer | Technology |
+| --- | --- |
+| Frontend | Streamlit |
+| Agent Orchestration | LangGraph |
+| LLM Provider | OpenRouter |
+| Web Search | Serper API |
+| Backend Runtime | AWS Lambda |
+| Container Registry | Amazon ECR |
+| Rate Limiting | Amazon DynamoDB |
+| Logs | Amazon CloudWatch |
+| CI/CD | GitHub Actions |
+| Package Management | uv |
+| Language | Python 3.12 |
+
+## Setup
+
+### Environment Variables
+
+Create a local `.env` file from the example:
+
+```bash
+cp env.example .env
 ```
 
-Deployment path:
+Required application variables:
 
-```text
-GitHub Actions -> build Docker image -> push to Amazon ECR -> update AWS Lambda
+- `SERPER_API_KEY`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_BASE_URL`
+
+Required AWS deployment variables:
+
+- `AWS_REGION`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_ACCOUNT_ID`
+- `REPOSITORY_NAME`
+- `IMAGE_NAME`
+- `LAMBDA_FUNCTION_NAME`
+- `ROLE_NAME`
+
+Required rate-limit variables:
+
+- `RATE_LIMIT_ENABLED`
+- `RATE_LIMIT_TABLE_NAME`
+- `RATE_LIMIT_MONTHLY_LIMIT`
+- `RATE_LIMIT_PER_CLIENT_LIMIT`
+
+### Install Dependencies
+
+```bash
+uv sync --all-extras
 ```
 
-## Public Demo Rate Limiting
+### Run Streamlit Locally
 
-The public Streamlit demo invokes Lambda directly, so API Gateway usage-plan limits do not apply. Rate limiting is enforced inside Lambda before the LangGraph workflow starts.
+```bash
+uv run streamlit run streamlit_app.py
+```
 
-The limiter uses DynamoDB as a small shared counter:
+For local Streamlit testing, configure AWS region, AWS credentials, and the Lambda function name in your local environment.
 
-- `RATE_LIMIT_MONTHLY_LIMIT`: total public demo requests per month
-- `RATE_LIMIT_PER_CLIENT_LIMIT`: requests per anonymous Streamlit browser session per month
+## AWS Deployment
+
+### DynamoDB Rate Limit Table
 
 Create the DynamoDB table:
 
 ```bash
 aws dynamodb create-table \
-    --table-name multi-agent-rate-limits \
-    --attribute-definitions AttributeName=pk,AttributeType=S \
-    --key-schema AttributeName=pk,KeyType=HASH \
-    --billing-mode PAY_PER_REQUEST \
-    --region us-east-1
+  --table-name <RATE_LIMIT_TABLE_NAME> \
+  --attribute-definitions AttributeName=pk,AttributeType=S \
+  --key-schema AttributeName=pk,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region <AWS_REGION>
 ```
 
 Enable TTL on the `ttl` attribute:
 
 ```bash
 aws dynamodb update-time-to-live \
-    --table-name multi-agent-rate-limits \
-    --time-to-live-specification "Enabled=true,AttributeName=ttl" \
-    --region us-east-1
+  --table-name <RATE_LIMIT_TABLE_NAME> \
+  --time-to-live-specification "Enabled=true,AttributeName=ttl" \
+  --region <AWS_REGION>
 ```
 
-Add these Lambda environment variables:
-
-```plaintext
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_TABLE_NAME=multi-agent-rate-limits
-RATE_LIMIT_MONTHLY_LIMIT=50
-RATE_LIMIT_PER_CLIENT_LIMIT=2
-```
-
-Add this permission to the Lambda execution role:
+The Lambda execution role needs:
 
 ```json
 {
   "Effect": "Allow",
   "Action": "dynamodb:UpdateItem",
-  "Resource": "arn:aws:dynamodb:us-east-1:<AWS_ACCOUNT_ID>:table/multi-agent-rate-limits"
+  "Resource": "arn:aws:dynamodb:<AWS_REGION>:<AWS_ACCOUNT_ID>:table/<RATE_LIMIT_TABLE_NAME>"
 }
 ```
 
-The Lambda code updates DynamoDB counters with `dynamodb:UpdateItem` before running the research workflow.
+### Lambda Deployment
 
-## Prerequisites
-
-- Python 3.12
-- AWS CLI (for Lambda deployment)
-- Serper API key
-- OpenRouter API key
-- AWS Credentials (for Lambda deployment)
-
-## Installation
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/benitomartin/multiagent-langgraph-circleci.git
-   cd multiagent-langgraph-circleci
-   ```
-
-2. Create a virtual environment:
-
-   ```bash
-   uv venv
-   ```
-
-3. Activate the virtual environment:
-   - On Windows:
-
-     ```bash
-     .venv\Scripts\activate
-     ```
-
-   - On Unix or MacOS:
-
-     ```bash
-     source .venv/bin/activate
-     ```
-
-4. Install the required packages:
-
-   ```bash
-   uv sync --all-extras
-   ```
-
-5. Create a `.env` file in the root directory:
-
-   ```plaintext
-   # API Keys
-   SERPER_API_KEY=your_serper_key_here                
-   OPENROUTER_API_KEY=your_openrouter_key_here                
-
-   # AWS Configuration
-   AWS_REGION=your_aws_region                          
-   AWS_ACCESS_KEY_ID=your_aws_access_key              
-   AWS_SECRET_ACCESS_KEY=your_aws_secret_key          
-   AWS_ACCOUNT_ID=your_aws_account_id                 
-   
-   # Repository and Image Configuration
-   REPOSITORY_NAME=langgraph-ecr-docker-repo          
-   IMAGE_NAME=langgraph-lambda-image                  
-   
-   # Lambda Configuration
-   LAMBDA_FUNCTION_NAME=langgraph-lambda-function     
-   ROLE_NAME=multi-agent-role
-   ```
-
-   To obtain the required API keys:
-   - Serper API Key: Sign up at [Serper.dev](https://serper.dev)
-   - OpenRouter API Key: Sign up at [OpenRouter](https://openrouter.ai)
-   - AWS Credentials: Create through [AWS IAM Console](https://console.aws.amazon.com/iam)
-
-## Usage
-
-### Configuration
-
-The following parameters can be adjusted in `config/settings.py`:
-
-- `CONFIDENCE_THRESHOLD`: Threshold for confidence in fact-checking
-- `MAX_RETRIES`: Maximum number of retries for the search agent
-- `ADD_MAX_RESULTS`: Number of search results to add in each retry
-- `FACT_CHECK_MODEL`: Model used for fact-checking (default: "openai/gpt-4o-mini")
-- `SUMMARIZATION_MODEL`: Model used for summarization (default: "openai/gpt-4o-mini")
-
-### Local Execution
-
-To run the research graph locally:
-
-```bash
-uv run src/graph/research_graph.py \
-   --query "What are the benefits of using AWS Cloud Services?" \
-   --confidence-threshold 0.85 \
-   --max-retries 3 \
-   --add-max-results 2
-```
-
-### AWS Lambda Deployment
-
-Build and deploy the Docker image with the lambda function:
+Build and deploy manually:
 
 ```bash
 chmod +x build_deploy.sh
 ./build_deploy.sh
 ```
 
-### AWS Lambda Invocation
+The script:
 
-To invoke the deployed Lambda function add your region and run the following command:
+- syncs dependencies with `uv`
+- runs Ruff
+- builds a Lambda-compatible Docker image
+- pushes the image to ECR
+- creates or updates the Lambda function
+- sets Lambda runtime environment variables
+- adds the DynamoDB rate-limit policy to the Lambda role
 
-```bash
-aws lambda invoke \
-    --function-name langgraph-lambda-function \
-    --payload '{"query": "What are the benefits of using CircleCI?"}' \
-    --region <your_region> \
-    --cli-binary-format raw-in-base64-out \
-    response.json && \
-    cat response.json | jq
+### GitHub Actions Deployment
+
+The workflow lives at:
+
+```text
+.github/workflows/deploy.yml
 ```
 
+Deployment runs on:
+
+```text
+ubuntu-22.04
+```
+
+Add the application, AWS deployment, and rate-limit variables as GitHub repository secrets before running the workflow.
+
+After that, a normal push can redeploy the backend:
+
+```bash
+git add .
+git commit -m "Update application"
+git push
+```
+
+## Streamlit Cloud Deployment
+
+1. Deploy the repository on Streamlit Community Cloud.
+2. Set the main file path:
+
+   ```text
+   streamlit_app.py
+   ```
+
+3. Add the AWS region, limited Lambda invoke credentials, and Lambda function name in Streamlit secrets.
+
+The Streamlit IAM user should only have permission to invoke this Lambda function:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": "lambda:InvokeFunction",
+  "Resource": "arn:aws:lambda:<AWS_REGION>:<AWS_ACCOUNT_ID>:function:<LAMBDA_FUNCTION_NAME>"
+}
+```
+
+## Runtime Configuration
+
+The workflow parameters can be adjusted from the Streamlit UI:
+
+| Parameter | Purpose |
+| --- | --- |
+| Confidence threshold | Minimum confidence required before accepting the fact-check result |
+| Max retries | Number of additional search attempts if confidence is too low |
+| Extra results per retry | Additional search results added during retry |
+
+Model configuration is managed in `config/settings.py`.

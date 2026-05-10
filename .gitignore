@@ -49,6 +49,7 @@ build/
 
 # Local notes
 docs/
+REFERENCE_README.md
 
 # Logs
 *.log
