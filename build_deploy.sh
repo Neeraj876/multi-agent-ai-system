@@ -17,6 +17,12 @@ RATE_LIMIT_MONTHLY_LIMIT=${RATE_LIMIT_MONTHLY_LIMIT:-50}
 RATE_LIMIT_PER_CLIENT_LIMIT=${RATE_LIMIT_PER_CLIENT_LIMIT:-2}
 LAMBDA_ENV_VARS="Variables={SERPER_API_KEY=${SERPER_API_KEY},OPENROUTER_API_KEY=${OPENROUTER_API_KEY},OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL},RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED},RATE_LIMIT_TABLE_NAME=${RATE_LIMIT_TABLE_NAME},RATE_LIMIT_MONTHLY_LIMIT=${RATE_LIMIT_MONTHLY_LIMIT},RATE_LIMIT_PER_CLIENT_LIMIT=${RATE_LIMIT_PER_CLIENT_LIMIT}}"
 
+echo "Syncing Python environment..."
+uv sync --all-extras
+
+echo "Running Ruff..."
+uv run ruff check --fix --unsafe-fixes .
+
 # Check if the ECR repository exists, create it if it does not
 if ! aws ecr describe-repositories --repository-names ${REPOSITORY_NAME} --region ${AWS_REGION} 2>/dev/null; then
     echo "Repository ${REPOSITORY_NAME} does not exist. Creating..."

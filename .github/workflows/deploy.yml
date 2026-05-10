@@ -37,12 +37,6 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Create venv and install dependencies
-        run: uv sync --all-extras
-
-      - name: Run ruff
-        run: uv run ruff check --fix --unsafe-fixes .
-
       - name: Create .env file
         shell: bash
         run: |
