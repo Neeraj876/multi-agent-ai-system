@@ -79,37 +79,38 @@ def _check_rate_limit(event: dict) -> dict | None:
 
     dynamodb = boto3.client("dynamodb")
     names = {"#count": "count", "#ttl": "ttl"}
-    values = {
+    base_values = {
         ":zero": {"N": "0"},
         ":one": {"N": "1"},
         ":ttl": {"N": str(ttl)},
-        ":monthly_limit": {"N": str(monthly_limit)},
-        ":per_client_limit": {"N": str(per_client_limit)},
     }
+    monthly_values = {**base_values, ":monthly_limit": {"N": str(monthly_limit)}}
+    per_client_values = {**base_values, ":per_client_limit": {"N": str(per_client_limit)}}
 
     update_expression = "SET #count = if_not_exists(#count, :zero) + :one, #ttl = :ttl"
     try:
-        dynamodb.update_item(
-            TableName=table_name,
-            Key={"pk": {"S": f"global#{month_key}"}},
-            UpdateExpression=update_expression,
-            ConditionExpression="attribute_not_exists(#count) OR #count < :monthly_limit",
-            ExpressionAttributeNames=names,
-            ExpressionAttributeValues=values,
-        )
         dynamodb.update_item(
             TableName=table_name,
             Key={"pk": {"S": f"client#{client_id}#{month_key}"}},
             UpdateExpression=update_expression,
             ConditionExpression="attribute_not_exists(#count) OR #count < :per_client_limit",
             ExpressionAttributeNames=names,
-            ExpressionAttributeValues=values,
+            ExpressionAttributeValues=per_client_values,
+        )
+        dynamodb.update_item(
+            TableName=table_name,
+            Key={"pk": {"S": f"global#{month_key}"}},
+            UpdateExpression=update_expression,
+            ConditionExpression="attribute_not_exists(#count) OR #count < :monthly_limit",
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=monthly_values,
         )
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         if code == "ConditionalCheckFailedException":
             return _rate_limit_response("The public demo request limit has been reached.")
-        logger.exception("DynamoDB rate-limit update failed.")
+        message = exc.response.get("Error", {}).get("Message", "")
+        logger.exception("DynamoDB rate-limit update failed: %s - %s", code, message)
         return _rate_limit_response("Rate limiting failed on the server.")
 
     return None
