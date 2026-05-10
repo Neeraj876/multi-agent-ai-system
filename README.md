@@ -32,6 +32,7 @@ The project has been developed as part of the following [blog](https://circleci.
 ## Table of Contents
 
 - [Features](#features)
+- [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -48,6 +49,120 @@ The project has been developed as part of the following [blog](https://circleci.
 - Report generation with structured summaries
 - AWS Lambda deployment support
 - Configurable confidence scores and retry mechanisms
+
+## Architecture
+
+```text
+                          +----------------------+
+                          |        User          |
+                          +----------+-----------+
+                                     |
+                                     v
+                          +----------------------+
+                          |   Streamlit Cloud    |
+                          |   Frontend UI        |
+                          +----------+-----------+
+                                     |
+                                     | invokes Lambda directly
+                                     v
++------------------------- AWS Cloud --------------------------+
+|                                                              |
+|   +----------------------+        +----------------------+   |
+|   |  AWS Lambda          |        |  Amazon ECR          |   |
+|   |  Container Runtime   |<-------|  Docker Image        |   |
+|   +----------+-----------+        +----------------------+   |
+|              |                                               |
+|              v                                               |
+|   +----------------------+                                   |
+|   |  Lambda Handler      |                                   |
+|   +----------+-----------+                                   |
+|              |                                               |
+|              v                                               |
+|   +---------------------- LangGraph ----------------------+  |
+|   |                                                        |  |
+|   |  Search Agent  ->  Summarization Agent                 |  |
+|   |       ^                    |                            |  |
+|   |       |                    v                            |  |
+|   |  retry if low confidence  Fact-Checking Agent           |  |
+|   |                            |                            |  |
+|   |                            v                            |  |
+|   |                       Report Agent                      |  |
+|   |                                                        |  |
+|   +------------------------+-------------------------------+  |
+|                            |                                  |
+|                            v                                  |
+|                  +----------------------+                    |
+|                  | CloudWatch Logs      |                    |
+|                  +----------------------+                    |
+|                                                              |
++--------------------------------------------------------------+
+                                     |
+                                     v
+                          +----------------------+
+                          | Final Research Report|
+                          +----------------------+
+                                     |
+                                     v
+                          +----------------------+
+                          | Streamlit displays it|
+                          +----------------------+
+```
+
+Deployment path:
+
+```text
+GitHub Actions -> build Docker image -> push to Amazon ECR -> update AWS Lambda
+```
+
+## Public Demo Rate Limiting
+
+The public Streamlit demo invokes Lambda directly, so API Gateway usage-plan limits do not apply. Rate limiting is enforced inside Lambda before the LangGraph workflow starts.
+
+The limiter uses DynamoDB as a small shared counter:
+
+- `RATE_LIMIT_MONTHLY_LIMIT`: total public demo requests per month
+- `RATE_LIMIT_PER_CLIENT_LIMIT`: requests per anonymous Streamlit browser session per month
+
+Create the DynamoDB table:
+
+```bash
+aws dynamodb create-table \
+    --table-name multi-agent-rate-limits \
+    --attribute-definitions AttributeName=pk,AttributeType=S \
+    --key-schema AttributeName=pk,KeyType=HASH \
+    --billing-mode PAY_PER_REQUEST \
+    --region us-east-1
+```
+
+Enable TTL on the `ttl` attribute:
+
+```bash
+aws dynamodb update-time-to-live \
+    --table-name multi-agent-rate-limits \
+    --time-to-live-specification "Enabled=true,AttributeName=ttl" \
+    --region us-east-1
+```
+
+Add these Lambda environment variables:
+
+```plaintext
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_TABLE_NAME=multi-agent-rate-limits
+RATE_LIMIT_MONTHLY_LIMIT=50
+RATE_LIMIT_PER_CLIENT_LIMIT=2
+```
+
+Add this permission to the Lambda execution role:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": "dynamodb:UpdateItem",
+  "Resource": "arn:aws:dynamodb:us-east-1:<AWS_ACCOUNT_ID>:table/multi-agent-rate-limits"
+}
+```
+
+The Lambda code uses DynamoDB's transaction API, but IAM authorizes the `Update` operations in that transaction with `dynamodb:UpdateItem`.
 
 ## Prerequisites
 

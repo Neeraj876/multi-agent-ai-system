@@ -11,6 +11,11 @@ set +o allexport
 echo "Environment variables loaded."
 
 OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+RATE_LIMIT_TABLE_NAME=${RATE_LIMIT_TABLE_NAME:-multi-agent-rate-limits}
+RATE_LIMIT_MONTHLY_LIMIT=${RATE_LIMIT_MONTHLY_LIMIT:-50}
+RATE_LIMIT_PER_CLIENT_LIMIT=${RATE_LIMIT_PER_CLIENT_LIMIT:-2}
+LAMBDA_ENV_VARS="Variables={SERPER_API_KEY=${SERPER_API_KEY},OPENROUTER_API_KEY=${OPENROUTER_API_KEY},OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL},RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED},RATE_LIMIT_TABLE_NAME=${RATE_LIMIT_TABLE_NAME},RATE_LIMIT_MONTHLY_LIMIT=${RATE_LIMIT_MONTHLY_LIMIT},RATE_LIMIT_PER_CLIENT_LIMIT=${RATE_LIMIT_PER_CLIENT_LIMIT}}"
 
 # Check if the ECR repository exists, create it if it does not
 if ! aws ecr describe-repositories --repository-names ${REPOSITORY_NAME} --region ${AWS_REGION} 2>/dev/null; then
@@ -61,6 +66,26 @@ else
     echo "IAM role ${ROLE_NAME} already exists. Skipping role creation."
 fi
 
+echo "Ensuring Lambda role can update DynamoDB rate-limit counters..."
+cat > dynamodb-rate-limit-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "dynamodb:UpdateItem",
+      "Resource": "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${RATE_LIMIT_TABLE_NAME}"
+    }
+  ]
+}
+EOF
+aws iam put-role-policy \
+    --role-name ${ROLE_NAME} \
+    --policy-name MultiAgentDynamoDBRateLimitPolicy \
+    --policy-document file://dynamodb-rate-limit-policy.json \
+    --region ${AWS_REGION}
+rm dynamodb-rate-limit-policy.json
+
 # Check if the Lambda function exists, create it if it does not
 if ! aws lambda get-function --function-name ${LAMBDA_FUNCTION_NAME} --region ${AWS_REGION} 2>/dev/null; then
     echo "Lambda function ${LAMBDA_FUNCTION_NAME} does not exist. Creating..."
@@ -70,7 +95,7 @@ if ! aws lambda get-function --function-name ${LAMBDA_FUNCTION_NAME} --region ${
         --code ImageUri=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPOSITORY_NAME}:latest \
         --role arn:aws:iam::${AWS_ACCOUNT_ID}:role/${ROLE_NAME} \
         --region ${AWS_REGION} \
-        --environment "Variables={SERPER_API_KEY=${SERPER_API_KEY},OPENROUTER_API_KEY=${OPENROUTER_API_KEY},OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL}}" \
+        --environment "${LAMBDA_ENV_VARS}" \
         --timeout 300 \
         --memory-size 1024
 else
@@ -83,7 +108,7 @@ else
     aws lambda update-function-configuration \
         --function-name ${LAMBDA_FUNCTION_NAME} \
         --region ${AWS_REGION} \
-        --environment "Variables={SERPER_API_KEY=${SERPER_API_KEY},OPENROUTER_API_KEY=${OPENROUTER_API_KEY},OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL}}"
+        --environment "${LAMBDA_ENV_VARS}"
 fi
 
 echo "Deployment complete."

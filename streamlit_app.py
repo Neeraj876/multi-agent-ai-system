@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 
 import boto3
 import streamlit as st
@@ -14,6 +15,9 @@ LAMBDA_FUNCTION_NAME = os.getenv("LAMBDA_FUNCTION_NAME", "")
 
 st.set_page_config(page_title="Multi-Agent Research Assistant", layout="wide")
 
+if "client_id" not in st.session_state:
+    st.session_state.client_id = str(uuid.uuid4())
+
 st.title("Multi-Agent Research Assistant")
 st.caption(
     "An agentic LangGraph workflow that searches the web, summarizes evidence, "
@@ -22,7 +26,7 @@ st.caption(
 
 with st.sidebar:
     st.header("Usage Limits")
-    st.write("This app is rate-limited to control API costs.")
+    st.write("This public demo is rate-limited automatically.")
 
 query = st.text_area(
     "Research question",
@@ -71,6 +75,7 @@ if submitted:
 
     payload = {
         "query": query.strip(),
+        "client_id": st.session_state.client_id,
         "confidence_threshold": confidence_threshold,
         "max_retries": int(max_retries),
         "add_max_results": int(add_max_results),
@@ -108,6 +113,9 @@ if submitted:
 
     errors = body.get("errors", [])
     if errors:
+        if data.get("statusCode") == 429:
+            st.error(errors[0])
+            st.stop()
         st.warning("The workflow returned errors.")
         for error in errors:
             st.write(f"- {error}")
