@@ -87,36 +87,29 @@ def _check_rate_limit(event: dict) -> dict | None:
         ":per_client_limit": {"N": str(per_client_limit)},
     }
 
+    update_expression = "SET #count = if_not_exists(#count, :zero) + :one, #ttl = :ttl"
     try:
-        dynamodb.transact_write_items(
-            TransactItems=[
-                {
-                    "Update": {
-                        "TableName": table_name,
-                        "Key": {"pk": {"S": f"global#{month_key}"}},
-                        "UpdateExpression": "SET #count = if_not_exists(#count, :zero) + :one, #ttl = :ttl",
-                        "ConditionExpression": "attribute_not_exists(#count) OR #count < :monthly_limit",
-                        "ExpressionAttributeNames": names,
-                        "ExpressionAttributeValues": values,
-                    }
-                },
-                {
-                    "Update": {
-                        "TableName": table_name,
-                        "Key": {"pk": {"S": f"client#{client_id}#{month_key}"}},
-                        "UpdateExpression": "SET #count = if_not_exists(#count, :zero) + :one, #ttl = :ttl",
-                        "ConditionExpression": "attribute_not_exists(#count) OR #count < :per_client_limit",
-                        "ExpressionAttributeNames": names,
-                        "ExpressionAttributeValues": values,
-                    }
-                },
-            ]
+        dynamodb.update_item(
+            TableName=table_name,
+            Key={"pk": {"S": f"global#{month_key}"}},
+            UpdateExpression=update_expression,
+            ConditionExpression="attribute_not_exists(#count) OR #count < :monthly_limit",
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
+        )
+        dynamodb.update_item(
+            TableName=table_name,
+            Key={"pk": {"S": f"client#{client_id}#{month_key}"}},
+            UpdateExpression=update_expression,
+            ConditionExpression="attribute_not_exists(#count) OR #count < :per_client_limit",
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
         )
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
-        if code == "TransactionCanceledException":
+        if code == "ConditionalCheckFailedException":
             return _rate_limit_response("The public demo request limit has been reached.")
-        logger.exception("DynamoDB rate-limit transaction failed.")
+        logger.exception("DynamoDB rate-limit update failed.")
         return _rate_limit_response("Rate limiting failed on the server.")
 
     return None

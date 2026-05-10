@@ -161,7 +161,7 @@ Add this permission to the Lambda execution role:
 }
 ```
 
-The Lambda code uses DynamoDB's transaction API, but IAM authorizes the `Update` operations in that transaction with `dynamodb:UpdateItem`.
+The Lambda code updates DynamoDB counters with `dynamodb:UpdateItem` before running the research workflow.
 
 ## Prerequisites
 
